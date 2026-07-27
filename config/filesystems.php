@@ -38,6 +38,21 @@ return [
             'report' => false,
         ],
 
+        /*
+         * Sensitive documents (payslips, issued letters). Rooted OUTSIDE
+         * public/ and never linked via storage:link. Files on this disk are
+         * only ever served through authenticated controller actions after a
+         * policy check + signed-URL check. `serve` is disabled so the
+         * framework never exposes a generic file-serving route for it.
+         */
+        'private' => [
+            'driver' => 'local',
+            'root' => storage_path('app/private'),
+            'serve' => false,
+            'throw' => true,
+            'report' => true,
+        ],
+
         'public' => [
             'driver' => 'local',
             'root' => storage_path('app/public'),

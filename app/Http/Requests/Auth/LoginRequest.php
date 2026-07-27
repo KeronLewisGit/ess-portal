@@ -42,7 +42,11 @@ class LoginRequest extends FormRequest
     {
         $this->ensureIsNotRateLimited();
 
-        if (! Auth::attempt($this->only('email', 'password'), $this->boolean('remember'))) {
+        // Deactivated accounts are treated as failed credentials so no
+        // information about account state is leaked to the caller.
+        $credentials = array_merge($this->only('email', 'password'), ['is_active' => true]);
+
+        if (! Auth::attempt($credentials, $this->boolean('remember'))) {
             RateLimiter::hit($this->throttleKey());
 
             throw ValidationException::withMessages([
