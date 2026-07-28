@@ -110,3 +110,130 @@ phase summaries per the build spec.
 30. **MySQL root/dev passwords in `docker-compose.yml`** (`secret`/`root`) are
     local-only conveniences; production credentials come from the host
     environment.
+
+## Phase 2 — Employee master data & HR provisioning
+
+### Schema & data model
+
+31. **`employees` is the master record; `users` is only a login.** A person can
+    exist as an employee with no account (`users.employee_id` nullable, now
+    with the real FK from Phase 1's deferred constraint, `nullOnDelete`).
+32. **`employee_code` is the human-facing unique key** (`EMP0001`), separate
+    from the surrogate `id`. Import and letters reference the code, never the
+    autoincrement id.
+33. **Soft deletes on employees** — separation history must survive for letters
+    and payslips already issued. Employees are normally *deactivated*
+    (`employment_status = separated`), and hard delete is HR-admin only.
+34. **`national_id` and `annual_salary` are encrypted at rest** via Eloquent's
+    `encrypted` cast, stored as TEXT (ciphertext is far longer than plaintext).
+    Consequence recorded here deliberately: they are **not searchable or
+    sortable in SQL**, and **losing `APP_KEY` makes them unrecoverable**. Both
+    are also in `$hidden` so they never serialize.
+35. **Enums as native DB enums** (`employment_type`, `employment_status`,
+    `pay_frequency`) mirroring `App\Enums\*`, matching Phase 1's `users.role`.
+36. **`departments.head_employee_id` FK is added after `employees` exists** —
+    the two tables reference each other, so the constraint is deferred to the
+    employees migration to avoid a circular create order.
+37. **Manager is a self-referencing `manager_id`** on employees, `nullOnDelete`.
+    No cycle prevention is enforced yet (an org chart that loops is possible);
+    flagged for the reporting phase, which is where a hierarchy is walked.
+38. **Salary currency defaults per employee** from `ess.defaults.salary_currency`
+    rather than being global — subsidiaries or expat contracts may differ.
+
+### Authorisation
+
+39. **Split HR permissions:** *all* HR staff (`hr_officer`, `hr_admin`,
+    `super_admin`) may browse and view employees; only HR **admins** may
+    create, edit, delete, bulk-deactivate, import, or provision logins. Salary
+    and national ID are in the record, so write access is the narrower ring.
+40. **Employees may view only their own record**, resolved from the session
+    user's `employee_id` — never from a request-supplied id.
+41. **Role escalation is blocked at provisioning:** an `hr_admin` can grant
+    employee / hr_officer / hr_admin, but **only a `super_admin` can create
+    another `super_admin`** (`Role::assignableRoles()`). Without this an HR
+    admin could mint a super-admin account it controls. Enforced in the form
+    request *and* reflected in the role dropdown.
+
+### Provisioning & invitations
+
+42. **Invitations reuse the password-reset broker.** The "set your password"
+    link is a standard reset token — expiring, single-use, already rate
+    limited — instead of a bespoke invitation token table.
+43. **Provisioned accounts get a 40-char random password** that is never
+    disclosed to anyone, plus `must_change_password = true`. The invite link is
+    the only usable way in.
+44. **`must_change_password` is now enforced** (Phase 1 item 16 closed) by the
+    `password.changed` middleware: every route except the change-password
+    screen and logout redirects until a new password is set.
+45. **Re-provisioning an existing employee re-sends the invitation** rather than
+    erroring, so HR can recover a lost invite. Accounts are matched by
+    `employee_id`, falling back to work email for pre-existing (Phase 1 demo)
+    users.
+46. **Invitation mail is queued**, not sent inline, so a slow or down SMTP relay
+    can't fail the HR request. Requires a queue worker (`database` driver).
+
+### Bulk import
+
+47. **`maatwebsite/excel` ^3.1 added** — the first dependency beyond Phase 1's
+    stack. It handles CSV and XLSX with one code path; hand-rolling XLSX was
+    not worth it.
+48. **Import is two-step: dry-run preview, then confirm.** The preview reports
+    every failing row with its 1-based row number and writes nothing.
+49. **All-or-nothing commit.** If *any* row fails validation the whole file is
+    rejected — a half-imported payroll file is worse than no import. Errors are
+    reported for every bad row at once, not just the first.
+50. **Uploads are staged on the `private` disk** under a UUID name between
+    preview and commit, then deleted on commit. The confirm step re-validates
+    the file and the token is constrained to a UUID (it is interpolated into a
+    storage path).
+51. **File type is sniffed by the validator** (`mimes:`), not trusted from the
+    extension. Size cap 5 MB.
+52. **Import resolves departments and managers by code**
+    (`department_code`, `manager_employee_code`), since an HR spreadsheet won't
+    carry database ids. Unknown codes are row errors, not silent nulls — a
+    typo'd manager must not quietly import an employee with no manager.
+    Managers are checked in a **second pass** against existing employees *plus*
+    the codes in the file, so a manager listed further down the same file is a
+    valid forward reference; links are applied after all rows are inserted.
+53. **No update-on-import.** A duplicate `employee_code` or work email is an
+    error, not an upsert — bulk overwriting existing salary data by accident is
+    the more expensive mistake. Duplicates *within* the file are caught too.
+
+### Audit trail
+
+54. **Generic `Auditable` trait + polymorphic `audit_logs`** rather than a
+    per-table history, so letters, payslips and templates reuse it unchanged
+    in later phases.
+55. **Anything in a model's `$hidden` is redacted to `********`** in the audit
+    trail (plus `password`/`remember_token` always). The log records *that*
+    salary changed, never the values.
+56. **Only real changes are logged** — timestamp-only and no-op saves are
+    skipped, and force-deletes are distinguished from soft deletes.
+57. **Bulk deactivate iterates rows instead of one mass `UPDATE`**, because a
+    mass update bypasses model events and would leave no audit trail. Slower,
+    but auditable.
+58. **Audit logs are append-only and have no UI yet** — a viewer is a Phase 6
+    (reporting) deliverable.
+
+### Reference numbers
+
+59. **`DocumentSequenceService` is built now, ahead of its consumers.** Letters
+    (Phase 3/4) and payslips (Phase 5) both need gap-free numbers; the counter
+    is a `prefix + year` row locked with `SELECT … FOR UPDATE`. Never derived
+    from `COUNT(*)` or `MAX(id)` — both race under concurrency.
+60. **Format is `PREFIX-YYYY-00001`**, zero-padded to 5 digits, counter resets
+    per year.
+
+### Conventions
+
+61. **Business logic lives in `app/Services`** (`EmployeeService`,
+    `EmployeeImportService`, `UserProvisioningService`,
+    `DocumentSequenceService`); controllers only authorise, validate and
+    delegate. Sensitive fields are assigned only in the service layer.
+62. **Blank sensitive fields on edit do not wipe stored values.** An empty
+    salary or national ID box in the edit form means "leave unchanged" — the
+    encrypted values are never re-displayed, so a blank field is the normal
+    state, not an instruction to clear.
+63. **Demo data:** 6 departments and 26 employees are seeded (idempotently) so
+    list, search, filter and pagination have something to work against.
+    `EMP0001` is linked to the Phase 1 `employee@example.com` account.

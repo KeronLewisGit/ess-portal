@@ -2,10 +2,12 @@
 
 namespace App\Providers;
 
+use App\Models\Department;
 use App\Models\Employee;
 use App\Models\LetterRequest;
 use App\Models\Payslip;
 use App\Models\User;
+use App\Policies\DepartmentPolicy;
 use App\Policies\EmployeePolicy;
 use App\Policies\LetterRequestPolicy;
 use App\Policies\PayslipPolicy;
@@ -29,6 +31,7 @@ class AppServiceProvider extends ServiceProvider
     {
         // Registered explicitly (rather than relying on auto-discovery) so
         // the authorisation surface is visible in one place.
+        Gate::policy(Department::class, DepartmentPolicy::class);
         Gate::policy(Employee::class, EmployeePolicy::class);
         Gate::policy(LetterRequest::class, LetterRequestPolicy::class);
         Gate::policy(Payslip::class, PayslipPolicy::class);

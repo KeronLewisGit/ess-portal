@@ -43,5 +43,11 @@ class DatabaseSeeder extends Seeder
                 ])
                 ->save();
         }
+
+        // Employee master (Phase 2). Departments first — employees FK them.
+        $this->call([
+            DepartmentSeeder::class,
+            EmployeeSeeder::class,
+        ]);
     }
 }

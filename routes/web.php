@@ -1,6 +1,11 @@
 <?php
 
 use App\Http\Controllers\Admin\SettingsController;
+use App\Http\Controllers\Auth\ForcedPasswordController;
+use App\Http\Controllers\Hr\DepartmentController;
+use App\Http\Controllers\Hr\EmployeeController;
+use App\Http\Controllers\Hr\EmployeeImportController;
+use App\Http\Controllers\Hr\EmployeeUserController;
 use App\Http\Controllers\ProfileController;
 use Illuminate\Support\Facades\Route;
 
@@ -10,7 +15,17 @@ Route::get('/', function () {
         : redirect()->route('login');
 });
 
-Route::middleware(['auth', 'verified'])->group(function () {
+/*
+ * Forced password change (HR-provisioned accounts). Auth-only, deliberately
+ * NOT behind the password.changed guard so it stays reachable while the flag
+ * is set.
+ */
+Route::middleware('auth')->group(function () {
+    Route::get('/password/change', [ForcedPasswordController::class, 'edit'])->name('password.change');
+    Route::put('/password/change', [ForcedPasswordController::class, 'update'])->name('password.change.update');
+});
+
+Route::middleware(['auth', 'verified', 'password.changed'])->group(function () {
     Route::get('/dashboard', function () {
         return view('dashboard');
     })->name('dashboard');
@@ -31,7 +46,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     /*
      * HR area — gated at area level by role middleware; record-level
-     * authorisation is (and will remain) enforced by policies.
+     * authorisation is additionally enforced by policies.
      */
     Route::prefix('hr')->name('hr.')
         ->middleware('role:hr_officer,hr_admin,super_admin')
@@ -41,10 +56,20 @@ Route::middleware(['auth', 'verified'])->group(function () {
                 'phase' => 'Phase 3 — Letter requests',
             ])->name('approvals.index');
 
-            Route::view('/employees', 'coming-soon', [
-                'title' => 'Employee Management',
-                'phase' => 'Phase 2 — Employee master',
-            ])->name('employees.index');
+            // Employee master (Phase 2).
+            Route::post('/employees/bulk-deactivate', [EmployeeController::class, 'bulkDeactivate'])
+                ->name('employees.bulk-deactivate');
+
+            Route::get('/employees/import', [EmployeeImportController::class, 'create'])->name('employees.import.create');
+            Route::post('/employees/import/preview', [EmployeeImportController::class, 'preview'])->name('employees.import.preview');
+            Route::post('/employees/import', [EmployeeImportController::class, 'store'])->name('employees.import.store');
+            Route::get('/employees/import-template', [EmployeeImportController::class, 'template'])->name('employees.import.template');
+
+            Route::post('/employees/{employee}/provision-user', [EmployeeUserController::class, 'store'])
+                ->name('employees.provision-user');
+
+            Route::resource('employees', EmployeeController::class);
+            Route::resource('departments', DepartmentController::class)->except(['show']);
 
             Route::view('/letter-types', 'coming-soon', [
                 'title' => 'Letter Templates',
@@ -73,7 +98,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         });
 });
 
-Route::middleware('auth')->group(function () {
+Route::middleware(['auth', 'password.changed'])->group(function () {
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');

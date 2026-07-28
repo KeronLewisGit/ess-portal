@@ -6,9 +6,13 @@ use App\Models\Employee;
 use App\Models\User;
 
 /**
- * Skeleton policy (Phase 1). Rules will be refined in Phase 2 when the
- * employee master exists, but the authorisation posture is set now:
- * an employee may only ever read their own record; management is HR-only.
+ * Employee master authorisation.
+ *
+ * - All HR staff may browse/view employee records.
+ * - Only HR admins (hr_admin, super_admin) may create, edit, deactivate,
+ *   import, or delete — employee master data (incl. salary) is sensitive.
+ * - A plain employee may only ever view their OWN record, resolved via
+ *   their linked employee_id (never a request-supplied id).
  */
 class EmployeePolicy
 {
@@ -19,8 +23,12 @@ class EmployeePolicy
 
     public function view(User $user, Employee $employee): bool
     {
-        return $user->isHrStaff()
-            || ($user->employee_id !== null && (int) $user->employee_id === (int) $employee->getKey());
+        if ($user->isHrStaff()) {
+            return true;
+        }
+
+        return $user->employee_id !== null
+            && (int) $user->employee_id === (int) $employee->getKey();
     }
 
     public function create(User $user): bool
@@ -34,6 +42,22 @@ class EmployeePolicy
     }
 
     public function delete(User $user, Employee $employee): bool
+    {
+        return $user->isHrAdmin();
+    }
+
+    /**
+     * Bulk deactivate and CSV/XLSX import.
+     */
+    public function manage(User $user): bool
+    {
+        return $user->isHrAdmin();
+    }
+
+    /**
+     * Provision (or re-invite) a login account for an employee.
+     */
+    public function provisionUser(User $user, Employee $employee): bool
     {
         return $user->isHrAdmin();
     }

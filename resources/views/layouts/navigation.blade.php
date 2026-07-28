@@ -44,6 +44,9 @@
                                     <x-dropdown-link :href="route('hr.employees.index')">
                                         {{ __('Employees') }}
                                     </x-dropdown-link>
+                                    <x-dropdown-link :href="route('hr.departments.index')">
+                                        {{ __('Departments') }}
+                                    </x-dropdown-link>
                                     <x-dropdown-link :href="route('hr.letter-types.index')">
                                         {{ __('Letter Templates') }}
                                     </x-dropdown-link>
@@ -140,6 +143,9 @@
                     </x-responsive-nav-link>
                     <x-responsive-nav-link :href="route('hr.employees.index')" :active="request()->routeIs('hr.employees.*')">
                         {{ __('Employees') }}
+                    </x-responsive-nav-link>
+                    <x-responsive-nav-link :href="route('hr.departments.index')" :active="request()->routeIs('hr.departments.*')">
+                        {{ __('Departments') }}
                     </x-responsive-nav-link>
                     <x-responsive-nav-link :href="route('hr.letter-types.index')" :active="request()->routeIs('hr.letter-types.*')">
                         {{ __('Letter Templates') }}

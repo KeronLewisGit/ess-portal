@@ -1,6 +1,6 @@
 # ESS Portal
 
-**Version 0.1.0** (Phase 1 — Foundation)
+**Version 0.2.0** (Phase 2 — Employee master data & HR provisioning)
 
 Employee Self-Service portal for job letters and payslips, built with
 **Laravel Framework 13.23.0** (PHP 8.3, MySQL 8, Breeze Blade + Tailwind +
@@ -61,7 +61,28 @@ Seeded by `php artisan db:seed` (all with password `password`):
 | HR Admin    | hr.admin@example.com     |
 | Super Admin | super.admin@example.com  |
 
-Self-registration is disabled — accounts are provisioned by HR (Phase 2).
+Self-registration is disabled — accounts are provisioned by HR from an
+employee record (**Employees → view → Create login**), which emails a
+set-password invitation and forces a password change on first login.
+
+Seeding also creates six departments and 26 employees (`EMP0001` is linked to
+`employee@example.com`); invitation email lands in Mailpit.
+
+## What works so far
+
+- **Phase 1** — auth, roles, policies, company settings, health checks
+- **Phase 2** — employee master data and HR provisioning:
+  - Departments CRUD (`/hr/departments`)
+  - Employees CRUD with search, department/status filters, pagination and
+    bulk deactivate (`/hr/employees`)
+  - CSV/XLSX bulk import with a **dry-run preview** — a row-by-row validation
+    report; nothing is written unless every row passes
+    (`/hr/employees/import`, downloadable column template)
+  - Login provisioning: creates the account, emails a set-password invite,
+    forces a password change on first sign-in
+  - Audit trail of every create/update/delete, with sensitive fields redacted
+  - Race-safe reference-number generator (row-locked counters, used by
+    letters and payslips in later phases)
 
 ## Environment variables that MUST change for production
 
@@ -96,5 +117,13 @@ deployment guides arrive in the hardening phase.
   `App\Models\Setting::get()`, UI at `/admin/settings` (super admin)
 - Health: `/up` verifies DB connectivity, private-disk writability and queue
   configuration (`app/Listeners/EnsureApplicationIsHealthy.php`)
+- Encrypted at rest: `employees.national_id` and `employees.annual_salary`
+  (Eloquent `encrypted` cast — **losing `APP_KEY` makes them unrecoverable**)
+- Audit trail: `App\Models\Concerns\Auditable` writes to `audit_logs`;
+  anything in a model's `$hidden` is redacted before it is stored
+- Business logic lives in `app/Services` (employee writes, import, user
+  provisioning, reference numbers); controllers stay thin
+- Reference numbers: `App\Services\DocumentSequenceService` (`SELECT … FOR
+  UPDATE` on a per-prefix/year counter — never `COUNT(*)`/`MAX(id)`)
 
 See `ASSUMPTIONS.md` for every default chosen during the build.

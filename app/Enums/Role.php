@@ -50,4 +50,20 @@ enum Role: string
             default => false,
         };
     }
+
+    /**
+     * Roles this role may grant when provisioning a login account. Only a
+     * super admin can mint another super admin — otherwise an hr_admin could
+     * escalate itself by provisioning a super admin account it controls.
+     *
+     * @return array<int, self>
+     */
+    public function assignableRoles(): array
+    {
+        return match ($this) {
+            self::SuperAdmin => self::cases(),
+            self::HrAdmin => [self::Employee, self::HrOfficer, self::HrAdmin],
+            default => [],
+        };
+    }
 }
