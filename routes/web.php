@@ -2,10 +2,13 @@
 
 use App\Http\Controllers\Admin\SettingsController;
 use App\Http\Controllers\Auth\ForcedPasswordController;
+use App\Http\Controllers\Hr\ApprovalController;
 use App\Http\Controllers\Hr\DepartmentController;
 use App\Http\Controllers\Hr\EmployeeController;
 use App\Http\Controllers\Hr\EmployeeImportController;
 use App\Http\Controllers\Hr\EmployeeUserController;
+use App\Http\Controllers\Hr\LetterTypeController;
+use App\Http\Controllers\LetterRequestController;
 use App\Http\Controllers\ProfileController;
 use Illuminate\Support\Facades\Route;
 
@@ -31,13 +34,21 @@ Route::middleware(['auth', 'verified', 'password.changed'])->group(function () {
     })->name('dashboard');
 
     /*
-     * Employee area — inner pages are Phase 3/5 deliverables; the routes
-     * exist now so the navigation shell reflects the final structure.
+     * Employee letter requests (Phase 3). Creating and submitting is rate
+     * limited per config('ess.rate_limits.letter_requests_per_day') so a
+     * single account can't flood the HR approval queue.
      */
-    Route::view('/requests', 'coming-soon', [
-        'title' => 'My Letter Requests',
-        'phase' => 'Phase 3 — Letter requests',
-    ])->name('letter-requests.index');
+    Route::get('/requests', [LetterRequestController::class, 'index'])->name('letter-requests.index');
+    Route::get('/requests/create', [LetterRequestController::class, 'create'])->name('letter-requests.create');
+    Route::get('/requests/{letter_request}', [LetterRequestController::class, 'show'])->name('letter-requests.show');
+    Route::get('/requests/{letter_request}/edit', [LetterRequestController::class, 'edit'])->name('letter-requests.edit');
+    Route::delete('/requests/{letter_request}', [LetterRequestController::class, 'cancel'])->name('letter-requests.cancel');
+
+    Route::middleware('throttle:letter-requests')->group(function () {
+        Route::post('/requests', [LetterRequestController::class, 'store'])->name('letter-requests.store');
+        Route::put('/requests/{letter_request}', [LetterRequestController::class, 'update'])->name('letter-requests.update');
+        Route::post('/requests/{letter_request}/submit', [LetterRequestController::class, 'submit'])->name('letter-requests.submit');
+    });
 
     Route::view('/payslips', 'coming-soon', [
         'title' => 'My Payslips',
@@ -51,10 +62,11 @@ Route::middleware(['auth', 'verified', 'password.changed'])->group(function () {
     Route::prefix('hr')->name('hr.')
         ->middleware('role:hr_officer,hr_admin,super_admin')
         ->group(function () {
-            Route::view('/approvals', 'coming-soon', [
-                'title' => 'Approval Queue',
-                'phase' => 'Phase 3 — Letter requests',
-            ])->name('approvals.index');
+            // Letter approval queue (Phase 3).
+            Route::get('/approvals', [ApprovalController::class, 'index'])->name('approvals.index');
+            Route::get('/approvals/{letter_request}', [ApprovalController::class, 'show'])->name('approvals.show');
+            Route::post('/approvals/{letter_request}/approve', [ApprovalController::class, 'approve'])->name('approvals.approve');
+            Route::post('/approvals/{letter_request}/reject', [ApprovalController::class, 'reject'])->name('approvals.reject');
 
             // Employee master (Phase 2).
             Route::post('/employees/bulk-deactivate', [EmployeeController::class, 'bulkDeactivate'])
@@ -71,10 +83,11 @@ Route::middleware(['auth', 'verified', 'password.changed'])->group(function () {
             Route::resource('employees', EmployeeController::class);
             Route::resource('departments', DepartmentController::class)->except(['show']);
 
-            Route::view('/letter-types', 'coming-soon', [
-                'title' => 'Letter Templates',
-                'phase' => 'Phase 3 — Letter requests',
-            ])->name('letter-types.index');
+            // Letter templates (Phase 3). Browsable by all HR staff; only HR
+            // admins can write (enforced by LetterTypePolicy).
+            Route::resource('letter-types', LetterTypeController::class)
+                ->parameters(['letter-types' => 'letter_type'])
+                ->except(['show']);
 
             Route::view('/payslips', 'coming-soon', [
                 'title' => 'Payslip Management',

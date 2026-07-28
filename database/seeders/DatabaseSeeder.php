@@ -49,5 +49,8 @@ class DatabaseSeeder extends Seeder
             DepartmentSeeder::class,
             EmployeeSeeder::class,
         ]);
+
+        // Letter templates (Phase 3).
+        $this->call(LetterTypeSeeder::class);
     }
 }

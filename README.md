@@ -1,6 +1,6 @@
 # ESS Portal
 
-**Version 0.2.0** (Phase 2 — Employee master data & HR provisioning)
+**Version 0.3.0** (Phase 3 — Letter requests)
 
 Employee Self-Service portal for job letters and payslips, built with
 **Laravel Framework 13.23.0** (PHP 8.3, MySQL 8, Breeze Blade + Tailwind +
@@ -83,6 +83,16 @@ Seeding also creates six departments and 26 employees (`EMP0001` is linked to
   - Audit trail of every create/update/delete, with sensitive fields redacted
   - Race-safe reference-number generator (row-locked counters, used by
     letters and payslips in later phases)
+- **Phase 3** — letter requests:
+  - HR-editable letter templates with `{{ placeholder }}` tokens
+    (`/hr/letter-types`) — five starter templates are seeded
+  - Employees request a letter, save drafts, and track status (`/requests`)
+  - HR approval queue with approve/reject and a required rejection reason
+    (`/hr/approvals`); the employee is emailed the outcome
+  - Salary on a letter is **employee opt-in and HR-admin approved** — an
+    HR officer can reject such a request but cannot approve it
+  - Reference numbers assigned at submission, per letter type and year
+    (`EC-2026-00001`), and request writes are rate limited per day
 
 ## Environment variables that MUST change for production
 
@@ -125,5 +135,11 @@ deployment guides arrive in the hardening phase.
   provisioning, reference numbers); controllers stay thin
 - Reference numbers: `App\Services\DocumentSequenceService` (`SELECT … FOR
   UPDATE` on a per-prefix/year counter — never `COUNT(*)`/`MAX(id)`)
+- Status workflows live in services, not controllers —
+  `App\Services\LetterRequestService` owns every letter transition, so
+  policies answer *who* may act and the service answers whether the
+  transition is legal at all
+- Rate limiters are named and env-driven, defined in `AppServiceProvider`
+  (`throttle:letter-requests`), keyed by user id rather than IP
 
 See `ASSUMPTIONS.md` for every default chosen during the build.

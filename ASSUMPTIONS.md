@@ -237,3 +237,79 @@ phase summaries per the build spec.
 63. **Demo data:** 6 departments and 26 employees are seeded (idempotently) so
     list, search, filter and pagination have something to work against.
     `EMP0001` is linked to the Phase 1 `employee@example.com` account.
+
+## Phase 3 — Letter requests
+
+### Workflow
+
+64. **Statuses are `draft → submitted → approved | rejected`, plus
+    `cancelled`.** A draft is the employee's private scratch space; only
+    `submitted` sits in the HR queue.
+65. **Single-step approval (confirmed with the client).** Any HR staff —
+    officer, admin or super admin — can decide a request. There is no
+    officer-recommends/admin-approves chain, which keeps a small HR team from
+    deadlocking on one person.
+66. **Reference numbers are assigned at submission, not at draft creation**, so
+    an abandoned draft never burns a number and the sequence stays gap-free.
+    Each letter type carries its own `reference_prefix`, so counters are
+    per-type-per-year (`EC-2026-00001`, `BL-2026-00001`).
+67. **Rejections must carry a reason** — it is shown to the employee and
+    emailed to them. Approvals may carry optional notes.
+68. **Employees can withdraw** a request while it is draft or pending;
+    once decided it is frozen. Nothing is ever hard-deleted
+    (`LetterRequestPolicy::delete()` returns false unconditionally) — history
+    is retained for audit, and requests are soft-deleted at most.
+69. **Status transitions are guarded in `LetterRequestService`, not just the
+    policy.** Policies answer *who* may act; the service answers whether the
+    transition is legal at all, so an out-of-order transition throws even if
+    reached from a console command or a future API.
+
+### Salary disclosure
+
+70. **Salary on a letter is employee opt-in, HR-admin approved (confirmed with
+    the client).** The employee ticks "include my salary"; that request can
+    then only be *approved* by an `hr_admin`/`super_admin`, never an
+    `hr_officer`.
+71. **An HR officer may still *reject* a salary request.** Rejecting discloses
+    nothing, and letting officers clear obvious non-starters keeps the queue
+    moving.
+72. **The salary VALUE is never copied onto the request row**, and is not shown
+    on the approval screen. Approval only authorises the value to be read from
+    the encrypted employee field at generation time (Phase 4). The approval UI
+    shows only *that* the letter will state salary.
+
+### Templates
+
+73. **Letter templates live in the database, not in Blade files**, so HR can
+    reword an official letter without a deployment. Bodies use
+    `{{ placeholder }}` tokens listed in `LetterType::PLACEHOLDERS` and shown
+    in the template editor.
+74. **Substitution itself is deferred to Phase 4** (generation). Phase 3 stores
+    and validates the template; nothing renders a letter yet.
+75. **All HR staff may read templates; only HR admins may write them.**
+    Officers need to know what a template says while working the queue, but
+    the wording of an official company letter is an admin-level change.
+76. **A template that has been used is never deleted** — issued letters must
+    keep resolving their type. It is deactivated instead (`is_active`), which
+    hides it from the employee's dropdown while leaving history intact. The FK
+    is `restrictOnDelete` as a database-level backstop.
+77. **Five starter templates are seeded** (employment confirmation, salary
+    certificate, bank loan, visa support, experience), idempotently by code.
+    The wording is a starting point for HR to edit, not a legal position.
+
+### Rate limiting
+
+78. **The letter-request write endpoints are throttled** at
+    `RATE_LIMIT_LETTER_REQUESTS_PER_DAY` (default 10), closing Phase 1 item 17
+    for letters. The limiter is keyed **by user id**, falling back to IP only
+    for guests — keying by IP alone would penalise a whole office behind one
+    NAT. Reads and cancellation are not throttled.
+
+### Notifications
+
+79. **The employee is emailed on approval and rejection**, queued like the
+    Phase 2 invitation so a slow relay can't fail the HR request. The email
+    carries the outcome and any reason, never the salary value.
+80. **A missing work email is skipped silently** rather than failing the
+    decision — a recorded HR decision must not roll back because a
+    notification could not be addressed.
