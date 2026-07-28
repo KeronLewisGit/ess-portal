@@ -103,6 +103,51 @@
                 </div>
             @endif
 
+            @if ($request->issuedLetter)
+                <div class="bg-white shadow-sm sm:rounded-lg p-6 space-y-4 text-sm">
+                    <div class="flex items-center justify-between">
+                        <p class="font-medium text-gray-800">Issued letter</p>
+                        @if ($request->issuedLetter->isRevoked())
+                            <span class="inline-flex px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800">Revoked</span>
+                        @else
+                            <span class="inline-flex px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">Valid</span>
+                        @endif
+                    </div>
+
+                    <p class="text-gray-600">
+                        <span class="font-mono">{{ $request->issuedLetter->reference_number }}</span> ·
+                        issued {{ $request->issuedLetter->issued_at->format('d M Y H:i') }}
+                        @if ($request->issuedLetter->isRevoked())
+                            · revoked {{ $request->issuedLetter->revoked_at->format('d M Y') }}
+                            by {{ $request->issuedLetter->revokedBy?->name ?? 'system' }}
+                            — {{ $request->issuedLetter->revoked_reason }}
+                        @endif
+                    </p>
+
+                    <div class="flex items-center gap-4">
+                        <a href="{{ route('letters.prepare', $request->issuedLetter) }}"
+                           class="inline-flex items-center px-4 py-2 bg-gray-800 border border-transparent rounded-md text-sm font-semibold text-white hover:bg-gray-700">
+                            {{ __('Download PDF') }}
+                        </a>
+                    </div>
+
+                    @can('revoke', $request->issuedLetter)
+                        <form method="POST" action="{{ route('hr.issued-letters.revoke', $request->issuedLetter) }}"
+                              class="border-t border-gray-100 pt-4 space-y-3"
+                              onsubmit="return confirm('Revoke this letter? Anyone verifying it will be told it is not valid.')">
+                            @csrf
+                            <x-input-label for="revoked_reason" :value="__('Reason for revoking (required)')" />
+                            <textarea id="revoked_reason" name="revoked_reason" rows="2" required
+                                      class="mt-1 block w-full border-gray-300 focus:border-red-400 focus:ring-red-400 rounded-md shadow-sm">{{ old('revoked_reason') }}</textarea>
+                            <x-input-error :messages="$errors->get('revoked_reason')" />
+                            <button type="submit" class="text-sm text-red-600 hover:text-red-800 underline">
+                                {{ __('Revoke this letter') }}
+                            </button>
+                        </form>
+                    @endcan
+                </div>
+            @endif
+
             <a href="{{ route('hr.approvals.index') }}" class="inline-block text-sm text-gray-600 hover:text-gray-900">
                 {{ __('Back to the queue') }}
             </a>

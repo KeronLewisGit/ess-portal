@@ -62,7 +62,7 @@ class LetterRequestController extends Controller
         $this->authorize('view', $letterRequest);
 
         return view('letter-requests.show', [
-            'request' => $letterRequest->load(['letterType', 'employee', 'decidedBy']),
+            'request' => $letterRequest->load(['letterType', 'employee', 'decidedBy', 'issuedLetter']),
         ]);
     }
 

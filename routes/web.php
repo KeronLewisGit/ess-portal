@@ -7,10 +7,22 @@ use App\Http\Controllers\Hr\DepartmentController;
 use App\Http\Controllers\Hr\EmployeeController;
 use App\Http\Controllers\Hr\EmployeeImportController;
 use App\Http\Controllers\Hr\EmployeeUserController;
+use App\Http\Controllers\Hr\IssuedLetterController;
 use App\Http\Controllers\Hr\LetterTypeController;
+use App\Http\Controllers\LetterDownloadController;
 use App\Http\Controllers\LetterRequestController;
+use App\Http\Controllers\LetterVerificationController;
 use App\Http\Controllers\ProfileController;
 use Illuminate\Support\Facades\Route;
+
+/*
+ * Public letter verification (Phase 4). The only unauthenticated application
+ * route: a recipient checks a letter is genuine. Throttled because it is
+ * public, and it discloses only initials + reference + type + issue date.
+ */
+Route::get('/verify/{token}', [LetterVerificationController::class, 'show'])
+    ->middleware('throttle:verification')
+    ->name('letters.verify');
 
 Route::get('/', function () {
     return auth()->check()
@@ -44,6 +56,17 @@ Route::middleware(['auth', 'verified', 'password.changed'])->group(function () {
     Route::get('/requests/{letter_request}/edit', [LetterRequestController::class, 'edit'])->name('letter-requests.edit');
     Route::delete('/requests/{letter_request}', [LetterRequestController::class, 'cancel'])->name('letter-requests.cancel');
 
+    /*
+     * Issued letter downloads (Phase 4). `prepare` mints a short-lived signed
+     * URL; `download` requires BOTH that signature and a policy pass, so a
+     * leaked link on its own is useless.
+     */
+    Route::get('/letters/{issuedLetter}/prepare', [LetterDownloadController::class, 'redirect'])
+        ->name('letters.prepare');
+    Route::get('/letters/{issuedLetter}/download', [LetterDownloadController::class, 'download'])
+        ->middleware('signed')
+        ->name('letters.download');
+
     Route::middleware('throttle:letter-requests')->group(function () {
         Route::post('/requests', [LetterRequestController::class, 'store'])->name('letter-requests.store');
         Route::put('/requests/{letter_request}', [LetterRequestController::class, 'update'])->name('letter-requests.update');
@@ -67,6 +90,10 @@ Route::middleware(['auth', 'verified', 'password.changed'])->group(function () {
             Route::get('/approvals/{letter_request}', [ApprovalController::class, 'show'])->name('approvals.show');
             Route::post('/approvals/{letter_request}/approve', [ApprovalController::class, 'approve'])->name('approvals.approve');
             Route::post('/approvals/{letter_request}/reject', [ApprovalController::class, 'reject'])->name('approvals.reject');
+
+            // Revoking an issued letter (HR admin only, per the policy).
+            Route::post('/issued-letters/{issuedLetter}/revoke', [IssuedLetterController::class, 'revoke'])
+                ->name('issued-letters.revoke');
 
             // Employee master (Phase 2).
             Route::post('/employees/bulk-deactivate', [EmployeeController::class, 'bulkDeactivate'])

@@ -18,7 +18,8 @@
                     </p>
                 @endif
 
-                <form method="POST" action="{{ route('admin.settings.update') }}" class="mt-6 space-y-6">
+                <form method="POST" action="{{ route('admin.settings.update') }}" class="mt-6 space-y-6"
+                      enctype="multipart/form-data">
                     @csrf
                     @method('PUT')
 
@@ -50,6 +51,39 @@
                             <x-input-error class="mt-2" :messages="$errors->get('settings.'.$key)" />
                         </div>
                     @endforeach
+
+                    <div class="border-t border-gray-100 pt-6 space-y-6">
+                        <p class="text-sm font-medium text-gray-700">Letterhead</p>
+                        <p class="-mt-4 text-xs text-gray-500">
+                            These images are stored privately and embedded into issued letter
+                            PDFs. They are never served over the web.
+                        </p>
+
+                        @foreach ($uploads as $key => $upload)
+                            <div>
+                                <x-input-label :for="$key" :value="$upload['label']" />
+
+                                @if ($uploadValues[$key])
+                                    <p class="mt-1 text-xs text-green-700">
+                                        Currently set. Upload a new file to replace it.
+                                    </p>
+                                    <label class="mt-1 flex items-center gap-2">
+                                        <input type="checkbox" name="remove_{{ $key }}" value="1"
+                                               class="rounded border-gray-300 text-red-600 shadow-sm focus:ring-red-500" />
+                                        <span class="text-xs text-gray-600">Remove the current image</span>
+                                    </label>
+                                @else
+                                    <p class="mt-1 text-xs text-gray-500">Not set.</p>
+                                @endif
+
+                                <input type="file" id="{{ $key }}" name="{{ $key }}" accept="image/png,image/jpeg"
+                                       class="mt-2 block w-full text-sm text-gray-600 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-gray-100 file:text-gray-700 hover:file:bg-gray-200" />
+
+                                <p class="mt-1 text-xs text-gray-500">{{ $upload['hint'] }}</p>
+                                <x-input-error class="mt-2" :messages="$errors->get($key)" />
+                            </div>
+                        @endforeach
+                    </div>
 
                     <div class="flex items-center gap-4">
                         <x-primary-button>{{ __('Save') }}</x-primary-button>

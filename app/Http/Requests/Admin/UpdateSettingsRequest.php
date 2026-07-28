@@ -31,6 +31,14 @@ class UpdateSettingsRequest extends FormRequest
             };
         }
 
+        // Letterhead images. The MIME is sniffed by the validator rather than
+        // trusted from the extension, and SVG is excluded deliberately — it
+        // can carry script and is embedded into a rendered document.
+        foreach (array_keys(SettingsController::UPLOADS) as $key) {
+            $rules[$key] = ['nullable', 'file', 'mimes:png,jpg,jpeg', 'max:2048'];
+            $rules["remove_{$key}"] = ['sometimes', 'boolean'];
+        }
+
         return $rules;
     }
 

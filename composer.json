@@ -1,13 +1,14 @@
 {
     "$schema": "https://getcomposer.org/schema.json",
     "name": "acme/ess-portal",
-    "version": "0.3.0",
+    "version": "0.4.0",
     "type": "project",
     "description": "Employee Self-Service (ESS) Portal - job letters and payslips.",
     "keywords": ["laravel", "ess", "hr", "portal"],
     "license": "MIT",
     "require": {
         "php": "^8.3",
+        "barryvdh/laravel-dompdf": "^3.1",
         "laravel/framework": "^13.8",
         "laravel/tinker": "^3.0",
         "maatwebsite/excel": "^3.1"

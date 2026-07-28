@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 class LetterRequest extends Model
@@ -53,6 +54,14 @@ class LetterRequest extends Model
     public function decidedBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'decided_by');
+    }
+
+    /**
+     * The generated PDF, once the request has been issued (Phase 4).
+     */
+    public function issuedLetter(): HasOne
+    {
+        return $this->hasOne(IssuedLetter::class);
     }
 
     /**

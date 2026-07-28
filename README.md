@@ -1,6 +1,6 @@
 # ESS Portal
 
-**Version 0.3.0** (Phase 3 — Letter requests)
+**Version 0.4.0** (Phase 4 — Letter generation)
 
 Employee Self-Service portal for job letters and payslips, built with
 **Laravel Framework 13.23.0** (PHP 8.3, MySQL 8, Breeze Blade + Tailwind +
@@ -93,6 +93,18 @@ Seeding also creates six departments and 26 employees (`EMP0001` is linked to
     HR officer can reject such a request but cannot approve it
   - Reference numbers assigned at submission, per letter type and year
     (`EC-2026-00001`), and request writes are rate limited per day
+- **Phase 4** — letter generation:
+  - Approving a request queues a job that renders the PDF onto the private
+    disk and emails the employee that it's ready (**needs a queue worker** —
+    without one, requests stay at "approved")
+  - Downloads require **both** a short-lived signed URL and a policy pass;
+    the stored SHA-256 is re-checked on every download
+  - Letterhead logo and signature uploaded at `/admin/settings`, stored
+    privately and embedded into PDFs as data URIs (never served over HTTP)
+  - Public verification at `/verify/{token}` — discloses only reference,
+    employee **initials**, letter type and issue date
+  - HR admins can revoke an issued letter; verification then reports it as
+    revoked and the employee can no longer download it
 
 ## Environment variables that MUST change for production
 
@@ -140,6 +152,11 @@ deployment guides arrive in the hardening phase.
   policies answer *who* may act and the service answers whether the
   transition is legal at all
 - Rate limiters are named and env-driven, defined in `AppServiceProvider`
-  (`throttle:letter-requests`), keyed by user id rather than IP
+  (`throttle:letter-requests`, `throttle:verification`), keyed by user id
+  rather than IP where a user is signed in
+- Issued letters are immutable: `issued_letters` stores the PDF path, a
+  SHA-256 of the bytes, and a snapshot of the facts as at issue time (the
+  salary is deliberately NOT in the snapshot — it exists only in the PDF)
+- `/verify/{token}` is the only unauthenticated application route
 
 See `ASSUMPTIONS.md` for every default chosen during the build.

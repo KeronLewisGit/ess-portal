@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Enums\LetterRequestStatus;
+use App\Jobs\GenerateLetterPdf;
 use App\Mail\LetterRequestDecisionMail;
 use App\Models\Employee;
 use App\Models\LetterRequest;
@@ -77,7 +78,14 @@ class LetterRequestService
     {
         $this->assert($request->status->isPending(), 'Only a pending request can be approved.');
 
-        return $this->decide($request, $decider, LetterRequestStatus::Approved, $notes);
+        $request = $this->decide($request, $decider, LetterRequestStatus::Approved, $notes);
+
+        // Generation happens off the request cycle: the approval click must
+        // not wait on a PDF render. The job flips the status to `issued` and
+        // emails the employee when the document is on disk.
+        GenerateLetterPdf::dispatch($request, $decider->id);
+
+        return $request;
     }
 
     public function reject(LetterRequest $request, User $decider, string $reason): LetterRequest

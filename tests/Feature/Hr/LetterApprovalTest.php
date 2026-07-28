@@ -4,11 +4,13 @@ namespace Tests\Feature\Hr;
 
 use App\Enums\LetterRequestStatus;
 use App\Enums\Role;
+use App\Jobs\GenerateLetterPdf;
 use App\Models\Employee;
 use App\Models\LetterRequest;
 use App\Models\LetterType;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\Mail;
 use Tests\TestCase;
 
@@ -21,6 +23,12 @@ class LetterApprovalTest extends TestCase
         parent::setUp();
 
         Mail::fake();
+
+        // These tests are about the approval DECISION. Approving also queues
+        // PDF generation (Phase 4), which would otherwise run inline on the
+        // sync queue and carry the status straight through to `issued` —
+        // generation itself is covered by LetterGenerationTest.
+        Bus::fake([GenerateLetterPdf::class]);
     }
 
     public function test_an_hr_officer_can_approve_an_ordinary_request(): void

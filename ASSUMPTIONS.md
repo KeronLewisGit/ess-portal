@@ -313,3 +313,94 @@ phase summaries per the build spec.
 80. **A missing work email is skipped silently** rather than failing the
     decision — a recorded HR decision must not roll back because a
     notification could not be addressed.
+
+## Phase 4 — Letter generation
+
+### Rendering
+
+81. **PDF engine: `barryvdh/laravel-dompdf` ^3.1** — the library named in the
+    Phase 1 stack. Templates are plain HTML with inline CSS.
+82. **Generation is automatic on approval (confirmed with the client)**, via
+    the queued `GenerateLetterPdf` job, so a slow render never blocks the HR
+    approval click. `approved` therefore means "decision made, document being
+    prepared" and `issued` means "PDF on disk". **This requires a queue
+    worker** — without one, requests sit at `approved` and no letter appears.
+83. **Generation is idempotent.** The service returns the existing issued
+    letter rather than re-rendering, and the job is `ShouldBeUnique`, so a
+    retry after a partial failure can never mint two documents for one
+    request.
+84. **Font subsetting is enabled** in the published `config/dompdf.php`.
+    Without it dompdf embeds the whole DejaVu family in every letter — a
+    one-page letter measured 1.1 MB before, 30 KB after. Letters are kept
+    indefinitely, so this matters.
+85. **dompdf's `enable_remote` stays false and `enable_javascript` is turned
+    off.** The letterhead logo and signature are read off the private disk and
+    embedded as base64 data URIs, so rendering never performs a fetch, and an
+    issued document carries no executable content.
+
+### The issued document
+
+86. **`issued_letters` is a separate table, not columns on the request.** An
+    issued letter is an immutable artefact with its own identity; nothing on
+    it is mass assignable and only revocation ever changes a row.
+87. **A snapshot of the rendered facts is stored** (name, code, job title,
+    department, dates). A letter must keep saying what it said even if the
+    employee later changes role. **The salary is deliberately excluded from
+    the snapshot** — the figure exists only inside the PDF.
+88. **SHA-256 of the PDF is stored at issue time and re-checked on every
+    download.** If the bytes on disk no longer match, the download is refused
+    (409) rather than serving a tampered document.
+89. **The reference number is copied onto the issued letter**, so the document
+    keeps its identity independently of the request row.
+
+### Download
+
+90. **Downloads need BOTH a valid signed URL and a policy pass.** A leaked link
+    alone is useless, and being signed in without a link is not enough either.
+    `letters.prepare` mints a URL valid for
+    `SIGNED_URL_EXPIRY_MINUTES` (default 15) and redirects to it.
+91. **The PDF is never emailed as an attachment.** Email is not a secure
+    channel and the letter may state salary; the "ready" email links to the
+    portal instead.
+92. **Revoked letters stop being downloadable by the employee but remain
+    downloadable by HR**, who need them for their own records.
+
+### Public verification
+
+93. **One unauthenticated route: `/verify/{token}` (confirmed with the
+    client).** It discloses the reference, the employee's **initials**, letter
+    type and issue date — no full name, no job title, no salary, no PDF. This
+    is what `Employee::initials` was added for in Phase 1.
+94. **The verification token is 48 random characters, separate from the
+    reference number.** The reference is sequential and printed on the letter;
+    if it doubled as the verification handle, every other letter would be
+    enumerable.
+95. **Initials come from the snapshot, not the live employee record**, so a
+    later name change cannot retroactively alter what a letter verifies as.
+96. **An unknown token renders the same "no matching letter" page as a
+    malformed one** — nothing distinguishes "never existed" from "revoked and
+    deleted". The route is throttled at 20/min per IP and marked `noindex`.
+97. **Revocation is HR-admin only and requires a reason.** The PDF is kept —
+    the holder may already have a copy and the audit trail must show what was
+    issued — but verification then reports the letter as revoked.
+
+### Letterhead assets
+
+98. **Logo and signature are uploaded, replacing the Phase 1 text-path
+    placeholders** (closing Phase 1 item 25), and are stored on the **private**
+    disk. A signature image is sensitive: it is never served over HTTP, only
+    embedded into a rendered PDF.
+99. **PNG and JPEG only — SVG is rejected**, because SVG can carry script and
+    these files are embedded into a rendered document. The MIME is sniffed by
+    the validator rather than trusted from the extension, capped at 2 MB.
+100. **Replacing an image deletes the previous file**, so superseded
+     signatures don't linger on disk, and a "remove" checkbox clears it.
+
+### Deferred
+
+101. **No QR code on the letter.** The verification URL is printed as text in
+     the footer instead. A QR would need a new dependency beyond the agreed
+     stack; revisit in the hardening phase if HR wants one.
+102. **Letters are not re-generated when a template changes.** Issued
+     documents are immutable by design; correcting one means revoking it and
+     approving a fresh request.

@@ -59,9 +59,28 @@
             </div>
 
             @if ($request->status === App\Enums\LetterRequestStatus::Approved)
-                <div class="bg-green-50 border border-green-200 text-green-800 rounded-md px-4 py-3 text-sm">
-                    This request has been approved. The signed letter will be available to
-                    download here once it has been generated.
+                <div class="bg-blue-50 border border-blue-200 text-blue-800 rounded-md px-4 py-3 text-sm">
+                    This request has been approved and your letter is being prepared.
+                    Refresh in a moment — you'll also get an email when it's ready.
+                </div>
+            @endif
+
+            @if ($request->issuedLetter && ! $request->issuedLetter->isRevoked())
+                <div class="bg-green-50 border border-green-200 rounded-md px-4 py-4 text-sm">
+                    <p class="text-green-900 font-medium">Your letter is ready.</p>
+                    <p class="mt-1 text-green-800">
+                        Issued {{ $request->issuedLetter->issued_at->format('d M Y') }} ·
+                        reference <span class="font-mono">{{ $request->issuedLetter->reference_number }}</span>
+                    </p>
+                    <a href="{{ route('letters.prepare', $request->issuedLetter) }}"
+                       class="mt-3 inline-flex items-center px-4 py-2 bg-green-700 border border-transparent rounded-md text-sm font-semibold text-white hover:bg-green-800">
+                        {{ __('Download PDF') }}
+                    </a>
+                </div>
+            @elseif ($request->issuedLetter?->isRevoked())
+                <div class="bg-red-50 border border-red-200 text-red-800 rounded-md px-4 py-3 text-sm">
+                    This letter was revoked on {{ $request->issuedLetter->revoked_at->format('d M Y') }}
+                    and can no longer be downloaded. Please contact HR.
                 </div>
             @endif
 

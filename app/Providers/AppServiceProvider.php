@@ -4,12 +4,14 @@ namespace App\Providers;
 
 use App\Models\Department;
 use App\Models\Employee;
+use App\Models\IssuedLetter;
 use App\Models\LetterRequest;
 use App\Models\LetterType;
 use App\Models\Payslip;
 use App\Models\User;
 use App\Policies\DepartmentPolicy;
 use App\Policies\EmployeePolicy;
+use App\Policies\IssuedLetterPolicy;
 use App\Policies\LetterRequestPolicy;
 use App\Policies\LetterTypePolicy;
 use App\Policies\PayslipPolicy;
@@ -38,6 +40,7 @@ class AppServiceProvider extends ServiceProvider
         // the authorisation surface is visible in one place.
         Gate::policy(Department::class, DepartmentPolicy::class);
         Gate::policy(Employee::class, EmployeePolicy::class);
+        Gate::policy(IssuedLetter::class, IssuedLetterPolicy::class);
         Gate::policy(LetterRequest::class, LetterRequestPolicy::class);
         Gate::policy(LetterType::class, LetterTypePolicy::class);
         Gate::policy(Payslip::class, PayslipPolicy::class);
@@ -64,5 +67,11 @@ class AppServiceProvider extends ServiceProvider
 
             return Limit::perDay($perDay)->by($request->user()?->id ?: $request->ip());
         });
+
+        // The public verification page is the only unauthenticated route, so
+        // it is throttled per IP to blunt token guessing and scraping. Tokens
+        // are 48 random characters, so this is defence in depth, not the
+        // primary control.
+        RateLimiter::for('verification', fn (Request $request) => Limit::perMinute(20)->by($request->ip()));
     }
 }

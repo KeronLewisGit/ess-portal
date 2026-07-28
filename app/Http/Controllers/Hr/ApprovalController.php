@@ -51,7 +51,7 @@ class ApprovalController extends Controller
         $this->authorize('access-hr-area');
 
         return view('hr.approvals.show', [
-            'request' => $letterRequest->load(['employee.department', 'letterType', 'decidedBy']),
+            'request' => $letterRequest->load(['employee.department', 'letterType', 'decidedBy', 'issuedLetter.revokedBy']),
         ]);
     }
 
